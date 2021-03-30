@@ -9,87 +9,82 @@ library(tidyverse)
 
 # Read in data set
 
+
 ## Cleaning code specific for Wash U dataset
 
-I've included this here (not run) 
+I've included this here (do not run) for those that speak R, it may be useful in creating the status variables
 ```{r}
-long_data <- read_csv("covid_sim_anon_2021-02-20.csv")
+# long_data <- read_csv("covid_sim_anon_2021-02-20.csv")
+# 
+# icu_enc <- long_data %>%
+#   arrange(enc, hours_round) %>%
+#   select(enc, hours_round, sofa_final, loc_cat, discharge_dispo,
+#          age_years, race, wscore_ahrq) %>%
+#   group_by(enc) %>%
+#   mutate(in_icu = ifelse(loc_cat == "icu", 1,0),
+#          ever_in_icu = max(in_icu)) %>%
+#   filter(ever_in_icu == 1) %>%
+#   mutate(first_icu = cumsum(in_icu)) %>% 
+#   filter(first_icu >0) %>%
+#   mutate(time_icu = hours_round - min(hours_round),
+#          out_icu = ifelse(loc_cat != "icu", 1, 0),
+#          out_icu_first = cumsum(out_icu)) %>% 
+#   filter( out_icu_first <=1) %>% 
+#   mutate(status = case_when(
+#     row_number() < n() ~ loc_cat,
+#     loc_cat == "dead" ~ "died",
+#     loc_cat == "icu" & discharge_dispo %in% c("dead", "hospice") ~ "died",
+#     discharge_dispo == "hospice" ~ "died",
+#     loc_cat == "wards" ~ "recovered",
+#     is.na(discharge_dispo) == FALSE ~ "recovered")
+#     ) %>%
+#   select(enc, hours_round, time_icu, sofa_final, loc_cat, discharge_dispo, status, 
+#          age_years, race, wscore_ahrq) %>%
+#   ungroup()
+# 
+# 
+# demographics <- icu_enc %>%
+#   group_by(enc) %>%
+#   filter(row_number() ==1) %>%
+#   select(age_years, race, wscore_ahrq, discharge_dispo) 
+# 
+# major_comorbid <- quantile(demographics$wscore_ahrq, probs = 0.75)
+# 
+# severe_comorbid <-  quantile(demographics$wscore_ahrq, probs = 0.90)
+# 
+# demographics <- demographics %>%
+#   mutate(comorbidity = case_when(
+#     wscore_ahrq < major_comorbid ~ "None",
+#     wscore_ahrq < severe_comorbid ~ "Major",
+#     is.na(wscore_ahrq)== FALSE ~ "Severe"
+#   ))
+# 
+# icu_enc <- icu_enc %>%
+#   left_join(demographics)%>%
+#   select(enc, time_icu, sofa_final, loc_cat, status, age_years, race, comorbidity)
+
 ```
 
 
-```{r}
-icu_enc <- long_data %>%
-  arrange(enc, hours_round) %>%
-  select(enc, hours_round, sofa_final, loc_cat, discharge_dispo,
-         age_years, race, wscore_ahrq) %>%
-  group_by(enc) %>%
-  mutate(in_icu = ifelse(loc_cat == "icu", 1,0),
-         ever_in_icu = max(in_icu)) %>%
-  filter(ever_in_icu == 1) %>%
-  mutate(first_icu = cumsum(in_icu)) %>% 
-  filter(first_icu >0) %>%
-  mutate(time_icu = hours_round - min(hours_round),
-         out_icu = ifelse(loc_cat != "icu", 1, 0),
-         out_icu_first = cumsum(out_icu)) %>% 
-  filter( out_icu_first <=1) %>% 
-  mutate(status = case_when(
-    row_number() < n() ~ loc_cat,
-    loc_cat == "dead" ~ "died",
-    loc_cat == "icu" & discharge_dispo %in% c("dead", "hospice") ~ "died",
-    discharge_dispo == "hospice" ~ "died",
-    loc_cat == "wards" ~ "recovered",
-    is.na(discharge_dispo) == FALSE ~ "recovered")
-    ) %>%
-  select(enc, hours_round, time_icu, sofa_final, loc_cat, discharge_dispo, status, 
-         age_years, race, wscore_ahrq) %>%
-  ungroup()
+## Details on cleaning to apply to your data
 
-
-demographics <- icu_enc %>%
-  group_by(enc) %>%
-  filter(row_number() ==1) %>%
-  select(age_years, race, wscore_ahrq, discharge_dispo) 
-
-major_comorbid <- quantile(demographics$wscore_ahrq, probs = 0.75)
-
-severe_comorbid <-  quantile(demographics$wscore_ahrq, probs = 0.90)
-
-demographics <- demographics %>%
-  mutate(comorbidity = case_when(
-    wscore_ahrq < major_comorbid ~ "None",
-    wscore_ahrq < severe_comorbid ~ "Major",
-    is.na(wscore_ahrq)== FALSE ~ "Severe"
-  ))
-
-icu_enc <- icu_enc %>%
-  left_join(demographics)
-```
-
-```{r}
-icu_enc %>%
-  select(enc, time_icu, sofa_final, loc_cat, status, age_years, race, comorbidity)
-  head()
-```
-
-## Cleaning issues to consider
-
+* Use SaO2/FiO2 until PaO2/FiO2 is unavailable 
+* Code 0 for missing SOFA score components
+* "Carryforward" values of the SOFA components, i.e. if the renal SOFA was 1 on admission it remains 1 until a new lab/urine output result changes it.
+* The comorbidity categorization in this dataset uses an AHRQ elixhauser of < `r major_comorbid` for none, `r major_comorbid` - `r severe_comorbid` for major, and > `r severe_comorbid` for severe. This is not set in stone obviously and we will need to standardize othis across datasets
 * Deaths that occur after transfer to the wards but prior to discharge are coded as recoveries
 * Transfers to hospice from the ICU are coded as deaths, even if they occur later from the floor
 * Do not need to filter out patients who are still in the hospital at the end of follow-up. Can use their data in the transition matrices
-* The comorbidity categorization in this dataset uses an elixhauser of < `r major_comorbid` for none, `r major_comorbid` - `r severe_comorbid` for major, and > `r severe_comorbid` for severe. We will need to standardize this across datasets
 
+
+
+## Load your data
 ```{r}
-no_disp_ids <- filter(icu_enc %>% group_by(enc), row_number() == n() & is.na(status ))$enc
-
-severe_comorbid
+#icu_data <- read_csv("your_data.csv")
 
 icu_enc %>%
-  #filter(row_number() == n()) %>%
-  filter(enc %in% no_disp_ids)
+  head()
 ```
-
-
-
 
 
 
@@ -112,7 +107,6 @@ sofa_trans_matrix <- function(data, min_age, max_age, start_day, stop_day, comor
              comorbidity == comorbid_cat)%>%
     mutate(sofa_final = ifelse(sofa_final >= 17, "[17,INF)", as.character(sofa_final)),
            next_state = case_when(
-             #row_number() < n()-1 ~ lead(sofa_final),
              row_number() == n()-1 & lead(status) %in% c("recovered", "died") ~lead(status),
              TRUE ~lead(sofa_final)),
            sofa_final = factor(sofa_final, levels = c(as.character(seq(0,17)), "[17,INF)")),
