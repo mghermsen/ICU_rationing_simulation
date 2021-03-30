@@ -12,7 +12,7 @@ library(tidyverse)
 
 ## Cleaning code specific for Wash U dataset
 
-I've included this here (do not run) for those that speak R, it may be useful in creating the status variables
+I've included this here (do not run) as it may be useful in creating the status variables
 ```{r}
 # long_data <- read_csv("covid_sim_anon_2021-02-20.csv")
 # 
@@ -24,12 +24,12 @@ I've included this here (do not run) for those that speak R, it may be useful in
 #   mutate(in_icu = ifelse(loc_cat == "icu", 1,0),
 #          ever_in_icu = max(in_icu)) %>%
 #   filter(ever_in_icu == 1) %>%
-#   mutate(first_icu = cumsum(in_icu)) %>% 
+#   mutate(first_icu = cumsum(in_icu)) %>%
 #   filter(first_icu >0) %>%
 #   mutate(time_icu = hours_round - min(hours_round),
 #          out_icu = ifelse(loc_cat != "icu", 1, 0),
-#          out_icu_first = cumsum(out_icu)) %>% 
-#   filter( out_icu_first <=1) %>% 
+#          out_icu_first = cumsum(out_icu)) %>%
+#   filter( out_icu_first <=1) %>%
 #   mutate(status = case_when(
 #     row_number() < n() ~ loc_cat,
 #     loc_cat == "dead" ~ "died",
@@ -38,7 +38,7 @@ I've included this here (do not run) for those that speak R, it may be useful in
 #     loc_cat == "wards" ~ "recovered",
 #     is.na(discharge_dispo) == FALSE ~ "recovered")
 #     ) %>%
-#   select(enc, hours_round, time_icu, sofa_final, loc_cat, discharge_dispo, status, 
+#   select(enc, hours_round, time_icu, sofa_final, loc_cat, discharge_dispo, status,
 #          age_years, race, wscore_ahrq) %>%
 #   ungroup()
 # 
@@ -46,7 +46,7 @@ I've included this here (do not run) for those that speak R, it may be useful in
 # demographics <- icu_enc %>%
 #   group_by(enc) %>%
 #   filter(row_number() ==1) %>%
-#   select(age_years, race, wscore_ahrq, discharge_dispo) 
+#   select(age_years, race, wscore_ahrq, discharge_dispo)
 # 
 # major_comorbid <- quantile(demographics$wscore_ahrq, probs = 0.75)
 # 
@@ -78,9 +78,11 @@ I've included this here (do not run) for those that speak R, it may be useful in
 
 
 
-## Load your data
+## Load your data and update your file name
 ```{r}
 #icu_data <- read_csv("your_data.csv")
+
+#institution_name <- "Wash_U"
 
 icu_enc %>%
   head()
@@ -119,13 +121,15 @@ sofa_trans_matrix <- function(data, min_age, max_age, start_day, stop_day, comor
     spread(key = "next_state", value = "n")
   
   
-  write_csv(M, paste0("sofa_transitions/sofa_transition_age_",min_age,"-", max_age, "_intubation_", start_day, "-", stop_day, "_comorbids_", comorbid_cat, ".csv"))
+  write_csv(M, paste0(institution_name,"/sofa_transitions/sofa_transition_age_",min_age,"-", max_age, "_intubation_", start_day, "-", stop_day, "_comorbids_", comorbid_cat, ".csv"))
 }
 ```
 
 
 ```{r}
-dir.create("sofa_transitions")
+dir.create(institution_name)
+dir.create(paste0(institution_name,"/sofa_transitions"))
+           
 for (a in seq(1, length(ages)-1)) {
   for (d in seq(1, length(days)-1)) {
     for (c in c("None", "Major", "Severe")) {
@@ -154,10 +158,10 @@ sofa_initial_distribution <- function(data, min_age, max_age, comorbid_cat){
   count(sofa_initial,
         .drop = FALSE)
    
-     write_csv(M, paste0("sofa_initial_distributions/sofa_initial_age_",min_age,"-", max_age,"_comorbids_", comorbid_cat, ".csv"))
+     write_csv(M, paste0(institution_name,"/sofa_initial_distributions/sofa_initial_age_",min_age,"-", max_age,"_comorbids_", comorbid_cat, ".csv"))
 }
 
-dir.create("sofa_initial_distributions")
+dir.create(paste0(institution_name, "/sofa_initial_distributions"))
 for (a in seq(1, length(ages)-1)) {
     for (c in c("None", "Major", "Severe")) {
       sofa_initial_distribution(icu_enc, ages[[a]], ages[[a+1]], c)
@@ -169,7 +173,7 @@ for (a in seq(1, length(ages)-1)) {
 ## Comorbidity distribution for each age group
 
 ```{r}
-dir.create("comorbidities_by_age")
+dir.create(paste0(institution_name, "/comorbidities_by_age"))
 comorbids_age <- function(data, age_list){
   M <- data %>% 
   group_by(enc) %>%
@@ -181,7 +185,7 @@ comorbids_age <- function(data, age_list){
   count(comorbidity, .drop = FALSE) %>%
     spread(key = "comorbidity", value = "n")
   
-       write_csv(M, paste0("comorbidities_by_age/comorbidities_by_age.csv"))
+       write_csv(M, paste0(institution_name,"/comorbidities_by_age/comorbidities_by_age.csv"))
 }
 
 
@@ -192,7 +196,7 @@ comorbids_age(icu_enc, ages)
 ## Age distribution
 
 ```{r}
-dir.create("age_distribution")
+dir.create(paste0(institution_name, "/age_distribution"))
 age_distribution <- function(data){
 
   M <- data %>% 
@@ -202,7 +206,7 @@ age_distribution <- function(data){
   mutate(age_years = cut(age_years, breaks =  c(seq(18, 90), Inf), right = FALSE)) %>%
   count(age_years, .drop = FALSE)
   
-       write_csv(M, paste0("age_distribution/age_distribution.csv"))
+       write_csv(M, paste0(institution_name, "/age_distribution/age_distribution.csv"))
 }
 
 age_distribution(icu_enc)
