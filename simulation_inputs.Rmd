@@ -1,0 +1,218 @@
+---
+title: "Inputs for ICU rationing simulation model"
+output: html_notebook
+---
+
+```{r}
+library(tidyverse)
+```
+
+# Read in data set
+
+## Cleaning code specific for Wash U dataset
+
+I've included this here (not run) 
+```{r}
+long_data <- read_csv("covid_sim_anon_2021-02-20.csv")
+```
+
+
+```{r}
+icu_enc <- long_data %>%
+  arrange(enc, hours_round) %>%
+  select(enc, hours_round, sofa_final, loc_cat, discharge_dispo,
+         age_years, race, wscore_ahrq) %>%
+  group_by(enc) %>%
+  mutate(in_icu = ifelse(loc_cat == "icu", 1,0),
+         ever_in_icu = max(in_icu)) %>%
+  filter(ever_in_icu == 1) %>%
+  mutate(first_icu = cumsum(in_icu)) %>% 
+  filter(first_icu >0) %>%
+  mutate(time_icu = hours_round - min(hours_round),
+         out_icu = ifelse(loc_cat != "icu", 1, 0),
+         out_icu_first = cumsum(out_icu)) %>% 
+  filter( out_icu_first <=1) %>% 
+  mutate(status = case_when(
+    row_number() < n() ~ loc_cat,
+    loc_cat == "dead" ~ "died",
+    loc_cat == "icu" & discharge_dispo %in% c("dead", "hospice") ~ "died",
+    discharge_dispo == "hospice" ~ "died",
+    loc_cat == "wards" ~ "recovered",
+    is.na(discharge_dispo) == FALSE ~ "recovered")
+    ) %>%
+  select(enc, hours_round, time_icu, sofa_final, loc_cat, discharge_dispo, status, 
+         age_years, race, wscore_ahrq) %>%
+  ungroup()
+
+
+demographics <- icu_enc %>%
+  group_by(enc) %>%
+  filter(row_number() ==1) %>%
+  select(age_years, race, wscore_ahrq, discharge_dispo) 
+
+major_comorbid <- quantile(demographics$wscore_ahrq, probs = 0.75)
+
+severe_comorbid <-  quantile(demographics$wscore_ahrq, probs = 0.90)
+
+demographics <- demographics %>%
+  mutate(comorbidity = case_when(
+    wscore_ahrq < major_comorbid ~ "None",
+    wscore_ahrq < severe_comorbid ~ "Major",
+    is.na(wscore_ahrq)== FALSE ~ "Severe"
+  ))
+
+icu_enc <- icu_enc %>%
+  left_join(demographics)
+```
+
+```{r}
+icu_enc %>%
+  select(enc, time_icu, sofa_final, loc_cat, status, age_years, race, comorbidity)
+  head()
+```
+
+## Cleaning issues to consider
+
+* Deaths that occur after transfer to the wards but prior to discharge are coded as recoveries
+* Transfers to hospice from the ICU are coded as deaths, even if they occur later from the floor
+* Do not need to filter out patients who are still in the hospital at the end of follow-up. Can use their data in the transition matrices
+* The comorbidity categorization in this dataset uses an elixhauser of < `r major_comorbid` for none, `r major_comorbid` - `r severe_comorbid` for major, and > `r severe_comorbid` for severe. We will need to standardize this across datasets
+
+```{r}
+no_disp_ids <- filter(icu_enc %>% group_by(enc), row_number() == n() & is.na(status ))$enc
+
+severe_comorbid
+
+icu_enc %>%
+  #filter(row_number() == n()) %>%
+  filter(enc %in% no_disp_ids)
+```
+
+
+
+
+
+
+# Create inputs
+
+## Age categories and duration of intubation
+```{r}
+ages <- c(18, 45, 60, 75, Inf)
+days <- c(0, 3, 7, Inf)
+```
+
+
+## SOFA transition matrix
+```{r}
+sofa_trans_matrix <- function(data, min_age, max_age, start_day, stop_day, comorbid_cat){
+  M <- data %>%
+    group_by(enc) %>%
+    filter(age_years >= min_age & age_years < max_age &
+             time_icu >= start_day*24 & time_icu <= stop_day*24 &
+             comorbidity == comorbid_cat)%>%
+    mutate(sofa_final = ifelse(sofa_final >= 17, "[17,INF)", as.character(sofa_final)),
+           next_state = case_when(
+             #row_number() < n()-1 ~ lead(sofa_final),
+             row_number() == n()-1 & lead(status) %in% c("recovered", "died") ~lead(status),
+             TRUE ~lead(sofa_final)),
+           sofa_final = factor(sofa_final, levels = c(as.character(seq(0,17)), "[17,INF)")),
+           next_state = factor(next_state, levels = c(as.character(seq(0,17)), "[17,INF)", "recovered", "died"))
+      ) %>%
+    filter(row_number() != n()) %>%
+    ungroup() %>%
+    group_by(sofa_final) %>%
+    count(next_state, .drop = FALSE) %>%
+    spread(key = "next_state", value = "n")
+  
+  
+  write_csv(M, paste0("sofa_transitions/sofa_transition_age_",min_age,"-", max_age, "_intubation_", start_day, "-", stop_day, "_comorbids_", comorbid_cat, ".csv"))
+}
+```
+
+
+```{r}
+dir.create("sofa_transitions")
+for (a in seq(1, length(ages)-1)) {
+  for (d in seq(1, length(days)-1)) {
+    for (c in c("None", "Major", "Severe")) {
+      sofa_trans_matrix(icu_enc, ages[[a]], ages[[a+1]], days[[d]], days[[d+1]], c)
+    }
+  }
+  
+}
+```
+
+
+## Initial SOFA score by age and comorbidity
+
+```{r}
+
+sofa_initial_distribution <- function(data, min_age, max_age, comorbid_cat){
+   M <- data %>% 
+     group_by(enc) %>%
+    filter(row_number() == 1 &
+             age_years >= min_age & age_years < max_age &
+             comorbidity == comorbid_cat)%>%
+    mutate(sofa_initial = ifelse(sofa_final >= 17, "[17,INF)", as.character(sofa_final)),
+           sofa_initial = factor(sofa_initial, 
+                                 levels = c(as.character(seq(0,17)),"[17,INF)"))) %>% 
+  ungroup() %>%
+  count(sofa_initial,
+        .drop = FALSE)
+   
+     write_csv(M, paste0("sofa_initial_distributions/sofa_initial_age_",min_age,"-", max_age,"_comorbids_", comorbid_cat, ".csv"))
+}
+
+dir.create("sofa_initial_distributions")
+for (a in seq(1, length(ages)-1)) {
+    for (c in c("None", "Major", "Severe")) {
+      sofa_initial_distribution(icu_enc, ages[[a]], ages[[a+1]], c)
+    }
+} 
+```
+
+
+## Comorbidity distribution for each age group
+
+```{r}
+dir.create("comorbidities_by_age")
+comorbids_age <- function(data, age_list){
+  M <- data %>% 
+  group_by(enc) %>%
+    filter(row_number() == 1)%>%
+    ungroup() %>%
+  mutate(age_cat = cut(age_years, breaks = age_list, right = FALSE),
+         comorbidity = factor(comorbidity, levels = c("None", "Major", "Severe"))) %>%
+  group_by(age_cat) %>%
+  count(comorbidity, .drop = FALSE) %>%
+    spread(key = "comorbidity", value = "n")
+  
+       write_csv(M, paste0("comorbidities_by_age/comorbidities_by_age.csv"))
+}
+
+
+comorbids_age(icu_enc, ages)
+```
+
+
+## Age distribution
+
+```{r}
+dir.create("age_distribution")
+age_distribution <- function(data){
+
+  M <- data %>% 
+  group_by(enc) %>%
+    filter(row_number() == 1)%>%
+    ungroup() %>%
+  mutate(age_years = cut(age_years, breaks =  c(seq(18, 90), Inf), right = FALSE)) %>%
+  count(age_years, .drop = FALSE)
+  
+       write_csv(M, paste0("age_distribution/age_distribution.csv"))
+}
+
+age_distribution(icu_enc)
+```
+
+
+
