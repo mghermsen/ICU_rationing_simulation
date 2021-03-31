@@ -61,22 +61,27 @@ I've included this here (do not run) as it may be useful in creating the status 
 # 
 # icu_enc <- icu_enc %>%
 #   left_join(demographics)%>%
-#   select(enc, time_icu, sofa_final, loc_cat, status, age_years, race, comorbidity)
+#   select(enc, time_icu, sofa_final, loc_cat, status, age_years, race, comorbidity) %>%
+#   mutate(race = case_when(
+#     race %in% c("White", "Black") ~ race,
+#     TRUE ~ "Other"
+#   ),
+#   race = factor(race)
+#   )
 
 ```
 
 
 ## Details on cleaning to apply to your data
 
-* Use SaO2/FiO2 until PaO2/FiO2 is unavailable 
+* Use SaO2/FiO2 if PaO2/FiO2 is unavailable 
 * Code 0 for missing SOFA score components
 * "Carryforward" values of the SOFA components, i.e. if the renal SOFA was 1 on admission it remains 1 until a new lab/urine output result changes it.
 * The comorbidity categorization in this dataset uses an AHRQ elixhauser of < `r major_comorbid` for none, `r major_comorbid` - `r severe_comorbid` for major, and > `r severe_comorbid` for severe. This is not set in stone obviously and we will need to standardize othis across datasets
 * Deaths that occur after transfer to the wards but prior to discharge are coded as recoveries
-* Transfers to hospice from the ICU are coded as deaths, even if they occur later from the floor
-* Do not need to filter out patients who are still in the hospital at the end of follow-up. Can use their data in the transition matrices
-
-
+* Transfers to hospice from the ICU are coded as deaths, regardless of exactly when/where the patient dies 
+* Do not need to filter out patients who are still in the hospital at the end of follow-up. Can use their censored data in the transition matrices
+* Please include race **and** ethnicity data, coded as Non-Hispanic Black, Non-Hispanic White, Hispanic, and Other.
 
 ## Load your data and update your file name
 ```{r}
@@ -92,10 +97,11 @@ icu_enc %>%
 
 # Create inputs
 
-## Age categories and duration of intubation
+## Age categories and duration of ICU stay
 ```{r}
 ages <- c(18, 45, 60, 75, Inf)
 days <- c(0, 3, 7, Inf)
+racial_groups <- levels(icu_enc$race)
 ```
 
 
@@ -123,10 +129,7 @@ sofa_trans_matrix <- function(data, min_age, max_age, start_day, stop_day, comor
   
   write_csv(M, paste0(institution_name,"/sofa_transitions/sofa_transition_age_",min_age,"-", max_age, "_intubation_", start_day, "-", stop_day, "_comorbids_", comorbid_cat, ".csv"))
 }
-```
 
-
-```{r}
 dir.create(institution_name)
 dir.create(paste0(institution_name,"/sofa_transitions"))
            
@@ -139,18 +142,19 @@ for (a in seq(1, length(ages)-1)) {
   
 }
 ```
+Note that the SOFA transition matrix does **not** depend on race, just age, comorbidities, and duration of ICU stay
 
-
-## Initial SOFA score by age and comorbidity
+## Initial SOFA score by race, age, and comorbidity
 
 ```{r}
 
-sofa_initial_distribution <- function(data, min_age, max_age, comorbid_cat){
+sofa_initial_distribution <- function(data, min_age, max_age, comorbid_cat, cur_race){
    M <- data %>% 
      group_by(enc) %>%
     filter(row_number() == 1 &
              age_years >= min_age & age_years < max_age &
-             comorbidity == comorbid_cat)%>%
+             comorbidity == comorbid_cat &
+             race == cur_race)%>%
     mutate(sofa_initial = ifelse(sofa_final >= 17, "[17,INF)", as.character(sofa_final)),
            sofa_initial = factor(sofa_initial, 
                                  levels = c(as.character(seq(0,17)),"[17,INF)"))) %>% 
@@ -158,38 +162,45 @@ sofa_initial_distribution <- function(data, min_age, max_age, comorbid_cat){
   count(sofa_initial,
         .drop = FALSE)
    
-     write_csv(M, paste0(institution_name,"/sofa_initial_distributions/sofa_initial_age_",min_age,"-", max_age,"_comorbids_", comorbid_cat, ".csv"))
+     write_csv(M, paste0(institution_name,"/sofa_initial_distributions/sofa_initial_age_",min_age,"-", max_age,"_comorbids_", comorbid_cat, "_race_", cur_race, ".csv"))
 }
 
 dir.create(paste0(institution_name, "/sofa_initial_distributions"))
-for (a in seq(1, length(ages)-1)) {
+
+for (r in racial_groups) {
+  for (a in seq(1, length(ages)-1)) {
     for (c in c("None", "Major", "Severe")) {
-      sofa_initial_distribution(icu_enc, ages[[a]], ages[[a+1]], c)
+      sofa_initial_distribution(icu_enc, ages[[a]], ages[[a+1]], c, r)
     }
-} 
+  } 
+}
+
 ```
 
 
-## Comorbidity distribution for each age group
+## Comorbidity distribution for each age group by race
 
 ```{r}
 dir.create(paste0(institution_name, "/comorbidities_by_age"))
-comorbids_age <- function(data, age_list){
+comorbids_age <- function(data, age_list, cur_race){
   M <- data %>% 
   group_by(enc) %>%
-    filter(row_number() == 1)%>%
+    filter(row_number() == 1,
+           race == cur_race)%>%
     ungroup() %>%
   mutate(age_cat = cut(age_years, breaks = age_list, right = FALSE),
-         comorbidity = factor(comorbidity, levels = c("None", "Major", "Severe"))) %>%
+         comorbidity = factor(comorbidity, 
+                              levels = c("None", "Major", "Severe"))) %>%
   group_by(age_cat) %>%
   count(comorbidity, .drop = FALSE) %>%
     spread(key = "comorbidity", value = "n")
   
-       write_csv(M, paste0(institution_name,"/comorbidities_by_age/comorbidities_by_age.csv"))
+       write_csv(M, paste0(institution_name,"/comorbidities_by_age/comorbidities_by_age_", cur_race, ".csv"))
 }
 
-
-comorbids_age(icu_enc, ages)
+for (r in racial_groups) {
+  comorbids_age(icu_enc, ages, r)
+}
 ```
 
 
@@ -197,20 +208,42 @@ comorbids_age(icu_enc, ages)
 
 ```{r}
 dir.create(paste0(institution_name, "/age_distribution"))
-age_distribution <- function(data){
+age_distribution <- function(data, cur_race){
 
   M <- data %>% 
   group_by(enc) %>%
-    filter(row_number() == 1)%>%
+    filter(row_number() == 1 & race == cur_race)%>%
     ungroup() %>%
   mutate(age_years = cut(age_years, breaks =  c(seq(18, 90), Inf), right = FALSE)) %>%
   count(age_years, .drop = FALSE)
   
-       write_csv(M, paste0(institution_name, "/age_distribution/age_distribution.csv"))
+       write_csv(M, paste0(institution_name, "/age_distribution/age_distribution_", cur_race, ".csv"))
+}
+for (r in racial_groups) {
+  age_distribution(icu_enc, r)
 }
 
-age_distribution(icu_enc)
 ```
+
+## Racial distribution
+
+```{r}
+dir.create(paste0(institution_name, "/racial_distribution"))
+race_distribution <- function(data){
+  M <- data %>% 
+  group_by(enc) %>%
+    filter(row_number() == 1)%>%
+    ungroup() %>%
+  count(race, .drop = FALSE)
+  
+       write_csv(M, paste0(institution_name, "/racial_distribution/racial_distribution_.csv"))
+}
+
+race_distribution(icu_enc)
+```
+
+Observed racial distribution
+
 
 
 
