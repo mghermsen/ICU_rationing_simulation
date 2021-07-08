@@ -7,8 +7,12 @@ This script accepts a clean, long form patient dataset and generates a set of in
 
 ## SOFA Coding Details
 
-To standardize SOFA coding between sites, please follow the best practices below.
+To standardize SOFA coding between sites, please follow the best practices below. 
 
+### General
+
+* If there are missing values, code 0 for that item until the lab/vital sign appears
+* Carryforward values from previous observations. For example, if the Creatine was 1.5 at 9:00 AM earning a Renal Score of 1, the patient's Renal Score remains 1 until a new creatinine value is recorded.
 
 ### SOFA CARDS
 Only number of pressors matters, not dose.
