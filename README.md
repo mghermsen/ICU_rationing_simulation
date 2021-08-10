@@ -40,3 +40,16 @@ If PaO2/FiO2 Is not available, use SaO2/FiO2:
 * SF 315-400 -> 1
 * SF >400 -> 0
 
+### SOFA renal 
+Ignore urine output, use creatine criteria only 
+* Cr < 1.2 -> 0
+* Cr 1.2-1.9 -> 1
+* Cr 2.0 - 3.4 -> 2
+* Cr 3.5 - 4.9 -> 3
+* Cr > 5.0 or on dialysis -> 4
+
+### SOFA liver and coagulation
+Use standard bilirubin and platelet cutoff categories
+
+## SOFA Central Nervous System
+Need to standardize this
