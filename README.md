@@ -51,7 +51,7 @@ Ignore urine output, use creatine criteria only
 ### SOFA liver and coagulation
 Use standard bilirubin and platelet cutoff categories
 
-## SOFA Central Nervous System
+### SOFA Central Nervous System
 By recorded Glascow Coma Scale (GCS). If GCS is 
 * GCS = 15 ->0
 * GCS 13-14 -> 1,
