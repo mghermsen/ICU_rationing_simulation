@@ -57,6 +57,8 @@ Ignore urine output, use creatine criteria only
 * Cr 3.5 - 4.9 -> 3
 * Cr > 5.0 or on dialysis -> 4
 
+After a dialysis session, the patient's SOFA renal score of 4 carries forward for 72 hours.
+
 ### SOFA liver and coagulation
 Use standard bilirubin and platelet cutoff categories
 
