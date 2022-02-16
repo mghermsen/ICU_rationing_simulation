@@ -13,6 +13,7 @@ To standardize SOFA coding between sites, please follow the best practices below
 
 * If there are missing values, code 0 for that item until the lab/vital sign appears
 * Carryforward values from previous observations. For example, if the Creatine was 1.5 at 9:00 AM earning a Renal Score of 1, the patient's Renal Score remains 1 until a new creatinine value is recorded.
+    * SOFA respiratory score from P/F and SOFA renal score from dialysis have carryforward time-limits, see below for details
 
 ### SOFA CARDS
 Only number of pressors matters, not dose.
@@ -33,12 +34,14 @@ Ignore respiratory support, i.e. make no distinction between mechanical ventilat
 * P/F 300-400 -> 1
 * P/F >400 -> 0
 
-If PaO2/FiO2 Is not available, use SaO2/FiO2:
+If PaO2/FiO2 is not available *or is more than 4 hours old*, use the SaO2/FiO2:
 * SF<=150 -> 4
 * SF 150-235 -> 3
 * SF 235-315 ->  2
 * SF 315-400 -> 1
 * SF >400 -> 0
+
+In other words, use the respiratory SOFA calculated from a blood gas for 4 hours after collection, then default back to SaO2/FiO2 ratio (unless a new blood gas has been drawn)
 
 To estimate the FiO2 for a patient on low-flow nasal cannula, use the following formula
 
@@ -59,8 +62,26 @@ Ignore urine output, use creatine criteria only
 
 After a dialysis session, the patient's SOFA renal score of 4 carries forward for 72 hours.
 
-### SOFA liver and coagulation
-Use standard bilirubin and platelet cutoff categories
+### SOFA liver
+
+total bilirubin in mg/dl
+
+* < 1.2 -> 0
+* 1.2-1.9 -> 1
+* 2.0-5.9 -> 2
+* 6 - 11.9 -> 3
+* >12 -> 4
+
+### SOFA Coagulation
+
+Platelet count in 10^3 per uL
+
+* >= 150 -> 0
+* 100-150 -> 1
+* 50-100 -> 2
+* 20-50 -> 3
+* <20 -> 4
+
 
 ### SOFA Central Nervous System
 By recorded Glascow Coma Scale (GCS). If GCS is missing, a score of zero is assigned
