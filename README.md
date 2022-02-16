@@ -1,9 +1,52 @@
 # ICU rationing simulation
 
-This script accepts a clean, long form patient dataset and generates a set of inputs for a discrete event microsimulation model of ICU rationing.
+This repository will contain two scripts, both of which accepts a clean, long form patient dataset in a standardized format (detailed below)
+
+1. quality_control_check.rmd - performs various quality control checks on the data
+2. simulation_inputs.rmd - generates a set of inputs for a discrete event microsimulation model of ICU rationing.
 
 
+## Data format 
 
+| encounter | time_icu | sofa_total | age_years | race               | comorbidity | vent | status | zip        |
+|-----------|----------|------------|-----------|--------------------|-------------|------|--------|------------|
+| 1         | 0        | 6          | 75        | Non-Hispanic White | Major       | 0    | icu    | XXXXX-YYYY |
+| 1         | 1        | 6          | 75        | Non-Hispanic White | Major       | 0    | icu    | XXXXX-YYYY |
+| 1         | 2        | 7          | 75        | Non-Hispanic White | Major       | 0    | icu    | XXXXX-YYYY |
+
+Only key columns for transition matrices included in sample above, feel free to include more variables (SOFA sub-components).
+
+**encounter** is an ID variable for each ICU stay (so a given patient can have multiple values).
+
+## Race/ethnicity cateogries
+
+* Non-Hispanic White
+* Non-Hispanic Black
+* Hispanic
+* Other              
+
+## Comorbidity calculation
+
+Categories using ARHQ Elixhauser score calculated with ![comorbidity](https://cran.r-project.org/web/packages/comorbidity/index.html) package in R
+
+* None - <75% of AHRQ Elixhauser score
+* Major - 75-90% of AHRQ Elixhauser score
+* Severe - >90% of AHRQ Elixhauser score
+
+Calculate these cutoffs *in your population* dataset
+
+## Status variable
+
+Factor with three levels **(icu, recovered, died)**
+
+* icu - currently admitted to ICU
+* recovered - last observation in ICU with successful discharge to floor
+* died - death in ICU or discharge to hospice (including floor transfers that went to hospice) 
+
+Notes: 
+1. Code transfers to nursing facilities or home as **recovered**
+2. Code deaths that occur after transfer to the wards but prior to discharge as **recovered**
+3. Code discharge to hospice from the ICU are coded as **died**, regardless of exactly when/where the patient dies 
 
 ## SOFA Coding Details
 
@@ -82,7 +125,6 @@ Platelet count in 10^3 per uL
 * 20-50 -> 3
 * <20 -> 4
 
-
 ### SOFA Central Nervous System
 By recorded Glascow Coma Scale (GCS). If GCS is missing, a score of zero is assigned
 * GCS = 15 ->0
@@ -90,3 +132,7 @@ By recorded Glascow Coma Scale (GCS). If GCS is missing, a score of zero is assi
 * GCS 10-12 -> 2,
 * GCS 6-9 -> 3,
 * GCS 0-5 -> 4
+
+
+## Other notes
+* Do not need to filter out patients who are still in the hospital at the end of follow-up. Can use their censored data in the transition matrices
