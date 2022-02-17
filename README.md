@@ -8,11 +8,11 @@ This repository will contain two scripts, both of which accepts a clean, long fo
 
 ## Data format 
 
-| encounter | time_icu | sofa_total | age_years | race               | comorbidity | vent | status | zip        |
-|-----------|----------|------------|-----------|--------------------|-------------|------|--------|------------|
-| 1         | 0        | 6          | 75        | Non-Hispanic White | Major       | 0    | icu    | XXXXX-YYYY |
-| 1         | 1        | 6          | 75        | Non-Hispanic White | Major       | 0    | icu    | XXXXX-YYYY |
-| 1         | 2        | 7          | 75        | Non-Hispanic White | Major       | 0    | icu    | XXXXX-YYYY |
+| encounter | time_icu | sofa_total | age_years | race               |  elix_vw    | elix_ahrq  |charlson    | vent | status | covid |  zip       |
+|-----------|----------|------------|-----------|--------------------|-------------|------------|------------|------|--------|-------|------------|
+| 1         | 0        | 6          | 75        | Non-Hispanic White |     22      |  19        | 3          | 0    | icu    |  1    | XXXXX-YYYY |
+| 1         | 1        | 6          | 75        | Non-Hispanic White |     22      |  19        | 3          | 0    | icu    |  1    | XXXXX-YYYY |
+| 1         | 2        | 7          | 75        | Non-Hispanic White |     22      |  19        | 3          | 0    | icu    |  1    | XXXXX-YYYY |
 
 Only key columns for transition matrices included in sample above, feel free to include more variables (SOFA sub-components).
 
@@ -27,13 +27,9 @@ Only key columns for transition matrices included in sample above, feel free to 
 
 ## Comorbidity calculation
 
-Categories using ARHQ Elixhauser score calculated with ![comorbidity](https://cran.r-project.org/web/packages/comorbidity/index.html) package in R
+Please report the ARHQ Elixhauser score (Moore et al., 2017), weighted VW Elixhauser (van Walraven et al. 2009), and Charlson index (Charlson 1987) calculated from ICD codes with the ![comorbidity](https://cran.r-project.org/web/packages/comorbidity/index.html) package in R
 
-* None - <75% of AHRQ Elixhauser score
-* Major - 75-90% of AHRQ Elixhauser score
-* Severe - >90% of AHRQ Elixhauser score
-
-Calculate these cutoffs *in your population* dataset
+The simulation_inputs.Rmd file will assign comoribidity category cutoffs for the simulation matrices in a standardized way across datasets
 
 ## Status variable
 
@@ -136,3 +132,4 @@ By recorded Glascow Coma Scale (GCS). If GCS is missing, a score of zero is assi
 
 ## Other notes
 * Do not need to filter out patients who are still in the hospital at the end of follow-up. Can use their censored data in the transition matrices
+* 9-digit zip code is preferred for more granular mapping to measures like the the Area Deprivation Index (https://rdrr.io/cran/sociome/man/get_adi.html)
