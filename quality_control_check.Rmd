@@ -1,0 +1,329 @@
+---
+title: "Quality control checks on long form data for dynamic ICU triage simulation project"
+output:
+  html_notebook:
+    theme: journal
+    toc: yes
+    toc_depth: 2
+    toc_float: yes
+  pdf_document: default
+---
+
+```{r packages, results=FALSE, message=FALSE, warning=FALSE}
+library(tidyverse)
+library(survival)
+library(gtsummary)
+library(survminer)
+library(knitr)
+```
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, cache = TRUE)
+```
+
+# Introduction
+
+This script accepts a clean long form data file and performs various quality control checks on it prior to generating transition matrices.
+
+## Load data in and rearrange columns
+
+```{r data_in}
+data <- read_csv("wusmbjc_rationing_deidentified2022-02-16.csv")  %>%
+  mutate(vent = ifelse(is.na(vent), 0, vent)) %>%
+  select(encounter, time_icu, sofa_total, age_years, race, comorbidity, vent, status, everything()) %>%
+  arrange(encounter, time_icu) 
+```
+
+# Initial sample statistics
+```{r initial_icu_sample}
+initial_icu_sample <- data %>% 
+  group_by(encounter) %>%
+  mutate(ever_intubated = max(vent),
+         dead = ifelse(status == "died", 1, 0),
+         dead = max(dead),
+         max_time = max(time_icu),
+         end_day = floor(max_time/24),
+         week_stay = ifelse(end_day > 6, 1, 0)) %>%
+  filter(row_number() ==1) %>%
+  rename( sofa_initial = sofa_total) %>%
+  mutate(
+    sofa_group = cut(sofa_initial, breaks=c(-Inf, 2, 5, 8, Inf), 
+                   labels= c("SOFA 0-2", "SOFA 3-5", "SOFA 6-8", "SOFA > 8"))) %>%
+                ungroup()
+```
+
+## Table 1
+```{r table_one}
+tbl_summary(initial_icu_sample %>% 
+              select(Age = age_years, 
+                     "Initial SOFA score" = sofa_initial, 
+                     "SOFA distribution" = sofa_group,
+                     "Mechanical ventilation at admission" = vent, 
+                     "Ever intubated" = ever_intubated,
+                     #elix_ahrq,
+                     #elix_vw,
+                     #charlson,
+                     comorbidity,
+                     "Race/ethnic group" = race,
+                     "Death or discharge to hospice" = dead,
+                     "ICU length of stay (days)" = end_day,
+                     "ICU stay 7 or more days" = week_stay))
+```
+
+## Age distribution
+```{r age_distribution}
+initial_icu_sample %>%
+  ggplot(aes(age_years)) + 
+  geom_histogram(color = "black", fill = "white") + 
+  labs(x = "Age")
+```
+
+## Initial SOFA distribution on ICU admission
+```{r sofa_distribution}
+initial_icu_sample %>% 
+  ggplot(aes(x = sofa_initial)) + 
+  geom_histogram(breaks = seq(-0.5,max(initial_icu_sample$sofa_initial)+0.5), color = "black", fill = "white") +
+  labs(x = "SOFA") 
+```
+```{r}
+summary(initial_icu_sample$sofa_initial)
+```
+
+### Comorbidity score distributions
+
+Need the data to run this code
+### Elixhauser AHRQ score distribution
+```{r elix_ahrq_score, eval = FALSE}
+initial_icu_sample %>% 
+  ggplot(aes(x =elix_ahrq )) + 
+  geom_histogram(color = "black", fill = "white") +
+  labs(x = "Elixhauser Score (AHRQ)") 
+```
+
+### VW exlixhuaser
+```{r elix_vw_score, eval = FALSE}
+initial_icu_sample %>% 
+  ggplot(aes(x =elix_vw )) + 
+  geom_histogram(color = "black", fill = "white") +
+  labs(x = "Elixhauser Score (VW)") 
+```
+
+
+### Charlson Comorbidity Index
+```{r charlson_index, eval = FALSE}
+initial_icu_sample %>% 
+  ggplot(aes(x =charlson)) + 
+  geom_histogram(color = "black", fill = "white") +
+  labs(x = "Charlson Index") 
+```
+
+# Survival analysis
+```{r km_by_SOFA}
+sofa_initial_fit <- survfit(Surv(end_day, dead) ~ sofa_group, data = initial_icu_sample)
+```
+
+```{r survival_by_SOFA}
+ggsurvplot(sofa_initial_fit, xlim = c(0, 90), 
+           break.time.by = 7,
+           xlab = "Days since ICU admission",
+           legend  = "top",
+           legend.title = "Hour 0 SOFA on admission to ICU",
+           legend.labs = c("0-2", "3-5", "6-8", "> 8"),
+           palette = "RdBu")
+```
+```{r survival_summary}
+tbl_survfit(sofa_initial_fit, times = c(7, 14, 28, 90))
+```
+
+## Statistics by racial/ethnic group 
+```{r}
+tbl_summary(initial_icu_sample %>% 
+              select(Age = age_years, 
+                     "Initial SOFA score" = sofa_initial, 
+                     "SOFA distribution" = sofa_group,
+                     "Mechanical ventilation at admission" = vent, 
+                     "Ever intubated" = ever_intubated,
+                     #elix_ahrq,
+                     #elix_vw,
+                     #charlson,
+                     comorbidity,
+                     "Race/ethnic group" = race,
+                      "Survival to ICU discharge" = dead,
+                     "ICU length of stay (days)" = end_day,
+                     "ICU stay 7 or more days" = week_stay),
+            by =  "Race/ethnic group")
+```
+
+
+## Survival to discharge
+```{r eval = FALSE}
+initial_icu_sample %>%
+  group_by(sofa_initial) %>%
+  count(dead) %>%
+  ggplot(aes(x = sofa_initial, fill = dead, y = n)) + 
+  geom_bar(stat = "Identity")
+```
+```{r icu_mortality_by_initial_SOFA_score}
+initial_icu_sample %>%
+    mutate(sofa_initial = factor(ifelse(sofa_initial <15, sofa_initial, ">=15"), levels = c(seq(0, 15), ">=15")),
+         ) %>%
+  group_by(sofa_initial) %>%
+  summarise(icu_mortality = mean(dead),
+            n = n()) %>%
+  mutate(se = sqrt((icu_mortality*(1-icu_mortality))/(n-1)),
+         mort_min = icu_mortality - 1.96*se, mort_max = icu_mortality + 1.96*se) %>%
+  ggplot(aes(x = sofa_initial, y= 100*icu_mortality, ymin = 100*mort_min, ymax = 100*mort_max)) + 
+  geom_bar(stat = "Identity") +
+  geom_point() + geom_errorbar() +
+  labs(x = "Hour 0 SOFA on ICU admission", y = "Survival to ICU discharge (%)") + lims(y = c(0,100))
+```
+
+
+
+
+
+## ICU mortality by age
+```{r icu_mortality_by_age}
+initial_icu_sample %>%
+  filter(age_years > 18)%>%
+  mutate(age_group = cut(age_years, breaks = c(18, 40, 50, 60, 70, 80, Inf))) %>%
+  group_by(age_group) %>%
+  summarise(icu_mortality = mean(dead),
+            n = n()) %>%
+  mutate(se = sqrt((icu_mortality*(1-icu_mortality))/(n-1)),
+         mort_min = icu_mortality - 1.96*se, mort_max = icu_mortality + 1.96*se) %>%
+  ggplot(aes(x = age_group, y= 100*icu_mortality, ymin = 100*mort_min, ymax = 100*mort_max)) + 
+  geom_bar(stat = "Identity") +
+  geom_point() + geom_errorbar() +
+  labs(x = "Age", y = "Survival to ICU discharge (%)") +  lims(y = c(0,100))
+```
+
+```{r icu_mortality_by_age_year}
+initial_icu_sample %>%
+  filter(age_years > 18 & age_years < 100)%>%
+  #mutate(age_group = cut(age_years, breaks = c(18, 40, 50, 60, 70, 80, Inf))) %>%
+  group_by(age_years) %>%
+  summarise(icu_mortality = mean(dead),
+            n = n()) %>%
+  mutate(se = sqrt((icu_mortality*(1-icu_mortality))/(n-1)),
+         mort_min = icu_mortality - 1.96*se, mort_max = icu_mortality + 1.96*se) %>%
+  ggplot(aes(x = age_years, y= 100*icu_mortality, ymin = 100*mort_min, ymax = 100*mort_max)) + 
+  geom_bar(stat = "Identity") +
+  geom_point() + geom_errorbar() +
+  labs(x = "Age", y = "Survival to ICU discharge (%)") + lims(y = c(0,100))
+```
+
+```{r auc_SOFA}
+initial_icu_sample$age_years %>% summary()
+```
+
+
+# Geographic diversity of candidates
+
+Plan to map zip code data to ADI values 
+
+
+
+# Possible errors
+
+## Missing hour observations
+
+These are missing hour observations, where presumably the patient had no data. We should decide if we want to fill in the missing hours with duplicated observations
+
+```{r wrong_time_encounters}
+wrong_time_ecounters <- data %>%
+  arrange(encounter, time_icu) %>%
+  mutate(time_check = row_number() -1) %>%
+  mutate(wrong_time = ifelse(time_check != time_icu, 1, 0)) %>%
+  group_by(encounter) %>%
+  mutate(num_wrong_times = sum(wrong_time)) %>%
+  filter(num_wrong_times > 0) %>%
+  pull(encounter) %>%
+  unique()
+```
+
+
+
+```{r missing_hour_example}
+data %>%
+  filter(encounter == wrong_time_ecounters[[1]])
+```
+
+### Duplicated hours
+
+these are scenarios where a patient had 2 or more SOFA scores in a given hour.We should probably take the maximum
+```{r}
+duplicated_hours_encounters <- data %>% 
+  group_by(encounter, time_icu) %>%
+  mutate(hour_repeat = row_number()) %>%
+  ungroup() %>%
+  filter(hour_repeat > 1) %>% 
+  pull(encounter)
+```
+
+```{r}
+data %>%
+  filter(encounter == duplicated_hours_encounters[[1]])
+```
+
+## SOFA Coding checks
+
+
+### SOFA respiratory
+
+### Median PF ratio by coded respiratory SOFA score
+```{r}
+data %>%
+  group_by(sofa_resp) %>%
+  filter(is.na(pf_ratio) == FALSE) %>%
+  summarise(median_pf = median(pf_ratio))
+```
+
+
+### Min and Max PF ratio by coded respiratory SOFA score
+```{r}
+data %>%
+  group_by(sofa_resp) %>%
+  filter(is.na(pf_ratio) == FALSE) %>%
+  summarise(min_pf = min(pf_ratio),
+            max_pf = max(pf_ratio))
+```
+
+
+### Min and Max SF ratio by coded respiratory SOFA score
+```{r}
+data %>%
+  group_by(sofa_resp) %>%
+  filter(is.na(pf_ratio) == TRUE) %>%
+  summarise(min_sf = min(sf_ratio, na.rm = TRUE),
+            max_sf = max(sf_ratio, na.rm = TRUE))
+```
+
+
+## Underage patients
+```{r underage_patients}
+underage_patients <- initial_icu_sample %>%
+  filter(age_years < 18)
+
+write_csv(underage_patients, "underage_patients.csv")
+```
+There were `r nrow(underage_patients)` patients under the age of 18 with an average age of `r mean(underage_patients$age_years)`
+
+
+## Very old patients
+```{r too_old_patients}
+too_old_patients <- initial_icu_sample %>%
+  filter(age_years > 105)
+
+write_csv(too_old_patients, "underage_patients.csv")
+```
+There were `r nrow(too_old_patients)` patients over the age of 105 with an average age of `r mean(too_old_patients$age_years)`
+
+
+# To do
+
+
+1. Add COVID + flag on admission
+2. Report actual elixhauser VW, elixhauser AHRQ, and charlson values
+
+
