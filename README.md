@@ -109,17 +109,17 @@ total bilirubin in mg/dl
 * 1.2-1.9 -> 1
 * 2.0-5.9 -> 2
 * 6 - 11.9 -> 3
-* >12 -> 4
+* > 12 -> 4
 
 ### SOFA Coagulation
 
 Platelet count in 10^3 per uL
 
-* >= 150 -> 0
+* > 150 -> 0
 * 100-150 -> 1
 * 50-100 -> 2
 * 20-50 -> 3
-* <20 -> 4
+* < 20 -> 4
 
 ### SOFA Central Nervous System
 By recorded Glascow Coma Scale (GCS). If GCS is missing, a score of zero is assigned
