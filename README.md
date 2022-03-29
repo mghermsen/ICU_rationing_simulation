@@ -65,30 +65,31 @@ Only number of pressors matters, not dose.
 
 
 ### SOFA respiratory
-Ignore respiratory support, i.e. make no distinction between mechanical ventilation, NIPPV (CPAP/BiPAP), high-flow, or low-flow nasal cannula
+Treat all respiratory support equivalently, i.e. make no distinction between mechanical ventilation, NIPPV (CPAP/BiPAP), high-flow, or low-flow nasal cannula
 
-* P/F <=100 -> 4
-* P/F 100-200 -> 3
+* P/F <=100 -> 4 (must be on respiratory support)
+* P/F 100-200 -> 3 (must be on respiratory support)
 * P/F 200-300 ->  2
 * P/F 300-400 -> 1
 * P/F >400 -> 0
 
 If PaO2/FiO2 is not available *or is more than 4 hours old*, use the SaO2/FiO2:
-* SF<=150 -> 4
-* SF 150-235 -> 3
+* SF<=150 -> 4 (must be on respiratory support)
+* SF 150-235 -> 3 (must be on respiratory support)
 * SF 235-315 ->  2
 * SF 315-400 -> 1
 * SF >400 -> 0
 
 In other words, use the respiratory SOFA calculated from a blood gas for 4 hours after collection, then default back to SaO2/FiO2 ratio (unless a new blood gas has been drawn)
 
-To estimate the FiO2 for a patient on low-flow nasal cannula, use the following formula
 
-Fi02 = 0.24 + 0.04*(LPM)
+#### Notes:
+* To estimate the FiO2 for a patient on low-flow nasal cannula, use the following formula where LPM = liters per minute of low-flow oxygen
+      * Fi02 = 0.24 + 0.04*(LPM)
 
-where LPM = liters per minute of low-flow oxygen
+* Max SOFA score on low-flow nasal cannula is 2.
 
-Finally, for patients on room air, set FiO2 = 0.21. Patients on room air should almost always have a respiratory SOFA of 0.
+* for patients on room air, set FiO2 = 0.21. Patients on room air should almost always have a respiratory SOFA of 0.
 
 
 ### SOFA renal 
