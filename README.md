@@ -67,18 +67,18 @@ Only number of pressors matters, not dose.
 ### SOFA respiratory
 Treat all respiratory support equivalently, i.e. make no distinction between mechanical ventilation, NIPPV (CPAP/BiPAP), high-flow, or low-flow nasal cannula
 
-* P/F <=100 -> 4 (must be on respiratory support)
-* P/F 100-200 -> 3 (must be on respiratory support)
-* P/F 200-300 ->  2
-* P/F 300-400 -> 1
-* P/F >400 -> 0
+* P/F < 100 and receiving respiratory support -> 4
+* P/F < 200 and receiving respiratory support -> 3
+* P/F < 300 ->  2
+* P/F < 400 -> 1
+* P/F >= 400 -> 0
 
 If PaO2/FiO2 is not available *or is more than 4 hours old*, use the SaO2/FiO2:
-* SF<=150 -> 4 (must be on respiratory support)
-* SF 150-235 -> 3 (must be on respiratory support)
-* SF 235-315 ->  2
-* SF 315-400 -> 1
-* SF >400 -> 0
+* SF < 150 and receiving respiratory support -> 4
+* SF < 235 and receiving respiratory support -> 3
+* SF < 315 ->  2
+* SF < 400 -> 1
+* SF >= 400 -> 0
 
 In other words, use the respiratory SOFA calculated from a blood gas for 4 hours after collection, then default back to SaO2/FiO2 ratio (unless a new blood gas has been drawn)
 
